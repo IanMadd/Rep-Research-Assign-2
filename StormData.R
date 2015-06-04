@@ -1,4 +1,4 @@
-library(dplyr) ; library(data.table)
+library(dplyr) ; library(data.table); library(ggplot2)
 
 
 
@@ -16,8 +16,6 @@ names(StormData)
 
 
 StormData$EVTYPE <- toupper(StormData$EVTYPE)
-
-
 
 
 StormData$EVTYPE <- as.character(StormData$EVTYPE)
@@ -54,9 +52,9 @@ StormData$EVTYPE[grepl("TROPICAL STORM", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
 StormData$EVTYPE[grepl("TROPICAL", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
-StormData$EVTYPE[grepl("ICE", StormData$EVTYPE) ] <- "ICE"
+StormData$EVTYPE[grepl("ICE", StormData$EVTYPE) | grepl("GLAZE", StormData$EVTYPE) | grepl("ICY", StormData$EVTYPE) ] <- "ICE"
 
-StormData$EVTYPE[grepl("FLOOD", StormData$EVTYPE) | grepl("FLDG", StormData$EVTYPE)] <- "FLOOD"
+StormData$EVTYPE[grepl("FLOOD", StormData$EVTYPE) | grepl("FLDG", StormData$EVTYPE) | grepl("RAPIDLY RISING WATER", StormData$EVTYPE)] <- "FLOOD"
 
 StormData$EVTYPE[grepl("MICROBURST", StormData$EVTYPE) ] <- "MICROBURST"
 
@@ -78,7 +76,7 @@ StormData$EVTYPE[grepl("FREEZ", StormData$EVTYPE) ] <- "FREEZE"
 
 StormData$EVTYPE[grepl("DUST", StormData$EVTYPE) ] <- "DUST"
 
-StormData$EVTYPE[grepl("MUD", StormData$EVTYPE) ] <- "MUD SLIDE"
+StormData$EVTYPE[grepl("MUD", StormData$EVTYPE) ] <- "MUDSLIDE"
 
 StormData$EVTYPE[grepl("STREAM", StormData$EVTYPE) ] <- "STREAM FLOOD"
 
@@ -92,14 +90,26 @@ StormData$EVTYPE[grepl("DAM", StormData$EVTYPE) ] <- "DAM FAILURE"
 
 StormData$EVTYPE[grepl("RIP CURRENT", StormData$EVTYPE) ] <- "RIP CURRENT"
 
-StormData$EVTYPE[grepl("HIGH SURF", StormData$EVTYPE) | grepl("HEAVY SURF", StormData$EVTYPE) | grepl("ROUGH SURF", StormData$EVTYPE)] <- "HEAVY SURF"
+StormData$EVTYPE[grepl("HIGH SURF", StormData$EVTYPE) | grepl("HEAVY SURF", StormData$EVTYPE) | grepl("ROUGH SURF", StormData$EVTYPE) | grepl("HAZARDOUS SURF", StormData$EVTYPE)] <- "HEAVY SURF"
 
 StormData$EVTYPE[grepl("STORM SURGE", StormData$EVTYPE) ] <- "STORM SURGE"
 
+StormData$EVTYPE[grepl("COASTALSTORM", StormData$EVTYPE) ] <- "COASTAL STORM"
+
 StormData$EVTYPE[grepl("AVALANC", StormData$EVTYPE) ] <- "AVALANCHE"
+
+StormData$EVTYPE[grepl("HEAVY SEAS", StormData$EVTYPE) | grepl("ROUGH SEAS", StormData$EVTYPE)] <- "ROUGH SEAS"
+
+StormData$EVTYPE[grepl("MARINE MISHAP", StormData$EVTYPE)] <- "MARINE ACCIDENT"
+
+StormData$EVTYPE[grepl("HYPOTHERM", StormData$EVTYPE)] <- "HYPOTHERMIA"
+
+StormData$EVTYPE[grepl("HYPERTHERMIA", StormData$EVTYPE)] <- "HYPERTHERMIA"
 
 StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
 StormLevels <- levels(StormData$EVTYPE)
+
+
 
 
 length(levels(StormData$EVTYPE))
@@ -119,6 +129,92 @@ WFIbyEVTYPE <- data.table(EVTYPE = names(WFIbyEVTYPE), WFI = WFIbyEVTYPE)
 
 
 WFIbyEVTYPE <- WFIbyEVTYPE[!is.na(WFIbyEVTYPE$WFI)]
+
+
+## Sort this in order.
+
+
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI))
+
+WFIbyEVTYPE$WFI[1]
+
+
+#WFIbyEVTYPE$WFI[i] / sum(StormData$EVTYPE == WFIbyEVTYPE$EVTYPE[i])
+
+for (i in 1: length(WFIbyEVTYPE$WFI)){
+  WFIbyEVTYPE$NumberOfEvents[i] <- sum(StormData$EVTYPE == WFIbyEVTYPE$EVTYPE[i])
+  WFIbyEVTYPE$WFIperEvent[i] <- WFIbyEVTYPE$WFI[i] / WFIbyEVTYPE$NumberOfEvents[i]
+}
+      
+
+
+WFIbyEVTYPE <- WFIbyEVTYPE[WFIbyEVTYPE$NumberOfEvents >= 100]
+
+
+
+
+
+        
+p1 <- ggplot(WFIbyEVTYPE, aes(EVTYPE, WFI))
+p1 <- p1 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Event", x="Weather Event", y="Weighted Fatalities and Injuries")
+  
+
+
+
+p2 <- ggplot(WFIbyEVTYPE, aes(EVTYPE, WFIperEvent))
+p2 <- p2 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust = 0))
+p2 <- p2 + labs(title = "Weighted Fatalities and Injuries by Event\ Divided by the number of weather events", x="Weather Event", y="Weighted Fatalities and Injuries")
+
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+
+multiplot(p1,p2, cols=1)
 
 #The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions 
 #about severe weather events. You must use the database to answer the questions below and show the code 

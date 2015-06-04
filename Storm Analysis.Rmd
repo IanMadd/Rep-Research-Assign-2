@@ -17,16 +17,16 @@ output: html_document
 
 
 I begin by downloading the dataset, reading into R, and giving it the name "StormData". 
-```{r}
-library(dplyr) ; library(data.table)
+```{r, cache=TRUE}
+library(dplyr) ; library(data.table) ; library(ggplot2); options(width=60)
 ```
 
 
 
 ```{r, cache=TRUE}
-if(!file.exists("./data/")){dir.create("./data/")}
-url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
-download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
+#if(!file.exists("./data/")){dir.create("./data/")}
+#url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
+#download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
 StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
 ```
 <br>
@@ -95,9 +95,9 @@ StormData$EVTYPE[grepl("TROPICAL STORM", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
 StormData$EVTYPE[grepl("TROPICAL", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
-StormData$EVTYPE[grepl("ICE", StormData$EVTYPE) ] <- "ICE"
+StormData$EVTYPE[grepl("ICE", StormData$EVTYPE) | grepl("GLAZE", StormData$EVTYPE) | grepl("ICY", StormData$EVTYPE) ] <- "ICE"
 
-StormData$EVTYPE[grepl("FLOOD", StormData$EVTYPE) | grepl("FLDG", StormData$EVTYPE)] <- "FLOOD"
+StormData$EVTYPE[grepl("FLOOD", StormData$EVTYPE) | grepl("FLDG", StormData$EVTYPE) | grepl("RAPIDLY RISING WATER", StormData$EVTYPE)] <- "FLOOD"
 
 StormData$EVTYPE[grepl("MICROBURST", StormData$EVTYPE) ] <- "MICROBURST"
 
@@ -105,13 +105,11 @@ StormData$EVTYPE[grepl("HAIL", StormData$EVTYPE) ] <- "HAIL"
 
 StormData$EVTYPE[grepl("WIND", StormData$EVTYPE) ] <- "WIND"
 
-StormData$EVTYPE[grepl("HAIL", StormData$EVTYPE) ] <- "HAIL"
-
 StormData$EVTYPE[grepl("WATERSP", StormData$EVTYPE) ] <- "WATERSPOUT"
 
-StormData$EVTYPE[grepl("COOL", StormData$EVTYPE) | grepl("COLD", StormData$EVTYPE)] <- "COLD"
+StormData$EVTYPE[grepl("COOL", StormData$EVTYPE) | grepl("COLD", StormData$EVTYPE) | grepl("HYPOTHERM", StormData$EVTYPE)] <- "COLD"
 
-StormData$EVTYPE[grepl("HOT", StormData$EVTYPE) | grepl("WARM", StormData$EVTYPE) | grepl("HEAT", StormData$EVTYPE) | grepl("HIGH TEMP", StormData$EVTYPE)] <- "HEAT"
+StormData$EVTYPE[grepl("HOT", StormData$EVTYPE) | grepl("WARM", StormData$EVTYPE) | grepl("HEAT", StormData$EVTYPE) | grepl("HIGH TEMP", StormData$EVTYPE) | grepl("HYPERTHERMIA", StormData$EVTYPE)] <- "HEAT"
 
 StormData$EVTYPE[grepl("HEAVY PR", StormData$EVTYPE) | grepl("HEAVY SH", StormData$EVTYPE)] <- "THUNDERSTORM"
 
@@ -119,7 +117,7 @@ StormData$EVTYPE[grepl("FREEZ", StormData$EVTYPE) ] <- "FREEZE"
 
 StormData$EVTYPE[grepl("DUST", StormData$EVTYPE) ] <- "DUST"
 
-StormData$EVTYPE[grepl("MUD", StormData$EVTYPE) ] <- "MUD SLIDE"
+StormData$EVTYPE[grepl("MUD", StormData$EVTYPE) ] <- "MUDSLIDE"
 
 StormData$EVTYPE[grepl("STREAM", StormData$EVTYPE) ] <- "STREAM FLOOD"
 
@@ -133,12 +131,17 @@ StormData$EVTYPE[grepl("DAM", StormData$EVTYPE) ] <- "DAM FAILURE"
 
 StormData$EVTYPE[grepl("RIP CURRENT", StormData$EVTYPE) ] <- "RIP CURRENT"
 
-StormData$EVTYPE[grepl("HIGH SURF", StormData$EVTYPE) | grepl("HEAVY SURF", StormData$EVTYPE) | grepl("ROUGH SURF", StormData$EVTYPE)] <- "HEAVY SURF"
+StormData$EVTYPE[grepl("HIGH SURF", StormData$EVTYPE) | grepl("HEAVY SURF", StormData$EVTYPE) | grepl("ROUGH SURF", StormData$EVTYPE) | grepl("HAZARDOUS SURF", StormData$EVTYPE)] <- "HEAVY SURF"
 
 StormData$EVTYPE[grepl("STORM SURGE", StormData$EVTYPE) ] <- "STORM SURGE"
 
+StormData$EVTYPE[grepl("COASTALSTORM", StormData$EVTYPE) ] <- "COASTAL STORM"
+
 StormData$EVTYPE[grepl("AVALANC", StormData$EVTYPE) ] <- "AVALANCHE"
 
+StormData$EVTYPE[grepl("HEAVY SEAS", StormData$EVTYPE) | grepl("ROUGH SEAS", StormData$EVTYPE)] <- "ROUGH SEAS"
+
+StormData$EVTYPE[grepl("MARINE MISHAP", StormData$EVTYPE)] <- "MARINE ACCIDENT"
 
 StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
 StormLevels <- levels(StormData$EVTYPE)
@@ -147,7 +150,7 @@ StormLevels <- levels(StormData$EVTYPE)
 
 
 <br>
-Even after all that conversion there are still 134 different types of weather events, but the most severe ones should be aggregated into a few names key weather event types. 
+Even after all that conversion there are still 124 different types of weather events, but the most severe ones should be aggregated into a few names key weather event types. 
 ```{r}
 length(levels(StormData$EVTYPE))
 ```
@@ -192,20 +195,112 @@ dim(StormInjuriesFatalities)
 
 I'm creating a new variable called WFI, or Weighted Fatalities and Injuries. This variable will combine injuries and fatalities into one variable and give more weight to fatalities. The formula is Fatalities * 10 + Injuries. 
 
-```{r}
+```{r, cache=TRUE}
 StormInjuriesFatalities$WFI <- sapply(StormInjuriesFatalities$FATALITIES, function(x) x*10) + StormInjuriesFatalities$INJURIES
 ```
 
 Using tapply I'll aggregate the WFI variable by each storm event type.
 
-```{r}
+```{r, cache=TRUE}
 WFIbyEVTYPE <- tapply(StormInjuriesFatalities$WFI, StormInjuriesFatalities$EVTYPE, sum, na.rm=TRUE)
 WFIbyEVTYPE <- data.table(EVTYPE = names(WFIbyEVTYPE), WFI = WFIbyEVTYPE)
 ```
 
 There are a lot of weather event types that don't have any injuries or fatalities. This step eliminates all NA's in WFIbyEVTYPE
-```{r}
+```{r, cache=TRUE}
 WFIbyEVTYPE <- WFIbyEVTYPE[!is.na(WFIbyEVTYPE$WFI)]
+```
+
+
+```{r, cache=TRUE}
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI))
+
+
+for (i in 1: length(WFIbyEVTYPE$WFI)){
+  WFIbyEVTYPE$NumberOfEvents[i] <- sum(StormData$EVTYPE == WFIbyEVTYPE$EVTYPE[i])
+  WFIbyEVTYPE$WFIperEvent[i] <- WFIbyEVTYPE$WFI[i] / WFIbyEVTYPE$NumberOfEvents[i]
+}
+
+WFIbyEVTYPE <- WFIbyEVTYPE[WFIbyEVTYPE$NumberOfEvents >= 100]
+
+```
+
+Create two plots.
+```{r, cache=TRUE}
+
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI)) 
+TopInjuriesFatalities <- WFIbyEVTYPE[1:10]
+        
+p1 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFI))
+p1 <- p1 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type", x="", y="Weighted Fatalities and Injuries")
+  
+
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFIperEvent)) 
+MostLethalWeather <- WFIbyEVTYPE[1:10]
+
+
+p2 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFIperEvent))
+p2 <- p2 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust = 0))
+p2 <- p2 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type\nDivided by the Total Number of Each Weather Event Type", x="", y="Weighted Fatalities and Injuries") + 
+     theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Initialize the multiplot function.
+```{r, cache=TRUE}
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+```
+
+And make the plots
+```{r, fig.align='center', fig.height=8, fig.width=8}
+multiplot(p1,p2, cols=1)
 ```
 
 
