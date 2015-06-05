@@ -17,18 +17,25 @@ output: html_document
 
 
 I begin by downloading the dataset, reading into R, and giving it the name "StormData". 
-```{r, cache=TRUE}
+```{r}
 library(dplyr) ; library(data.table) ; library(ggplot2); options(width=60)
 ```
 
 
 
 ```{r, cache=TRUE}
-#if(!file.exists("./data/")){dir.create("./data/")}
-#url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
-#download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
-StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
+if(!file.exists("./data/StormData.csv.bz2")){
+        if(!file.exists("./data/")){dir.create("./data/")}
+        url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
+        download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
+}
 ```
+```{r, cache=TRUE}
+
+StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
+
+```
+
 <br>
 
 ####Data Cleaning
@@ -54,14 +61,12 @@ names(StormData)
 
 The EVTYPE variable is troubling. It documents the type of storm event but the named events are unwieldy to put it mildly. There are variations on spelling, variation in the use of upper and lower case, typos, events that are abbreviated like TSTM, and events that should be the same but are not like Thunderstorm, THUNDERSTORM, TSTM WIND and THUNDERSTORMWIND. With all these variations there are 935 different factors
 
-To start with I'll put everything in all caps, just eliminating lower case spelling cuts out 37 levels.
-```{r, cache=TRUE}
-StormData$EVTYPE <- toupper(StormData$EVTYPE)
-```
-There's also a list of 76 events that contain the word "SUMMARY" for example "SUMMARY AUGUST 11" The person who entered these clearly didn't know what they were doing, so I'm eliminating them. I'm also going to convert and simplify all related event types. For example events that are similar to THUNDERSTORM, e.g. TSTM, THUNDERSTORM WIND G50, etc..., will become one event type "THUNDERSTORM".
+To start with I'll put everything in all caps, just eliminating lower case spelling cuts out 37 levels. There's also a list of 76 events that contain the word "SUMMARY", for example "SUMMARY AUGUST 11", that were incorrectly entered and don't indicate any particular weather type. I'm also going to convert and simplify all related event types. For example events that are similar to THUNDERSTORM, e.g. TSTM, THUNDERSTORM WIND G50, etc..., will become one event type "THUNDERSTORM". This next step performs all these weather type aggregations.
 
 ```{r, cache=TRUE}
 StormData$EVTYPE <- as.character(StormData$EVTYPE)
+
+StormData$EVTYPE <- toupper(StormData$EVTYPE)
 
 StormData <- StormData[!grepl("SUMMARY", StormData$EVTYPE)]
 
@@ -75,7 +80,7 @@ StormData$EVTYPE[grepl("VOLCANIC", StormData$EVTYPE) ] <- "VOLCANIC"
 
 StormData$EVTYPE[grepl("TORN", StormData$EVTYPE) ] <- "TORNADO"
 
-StormData$EVTYPE[grepl("LIGHTN", StormData$EVTYPE) ] <- "LIGHTNING"
+StormData$EVTYPE[grepl("LIGHTN", StormData$EVTYPE) | grepl("LIGHTING", StormData$EVTYPE) | grepl("LIGNTNING", StormData$EVTYPE) ] <- "LIGHTNING"
 
 StormData$EVTYPE[grepl("RAIN", StormData$EVTYPE) ] <- "RAIN"
 
@@ -143,14 +148,18 @@ StormData$EVTYPE[grepl("HEAVY SEAS", StormData$EVTYPE) | grepl("ROUGH SEAS", Sto
 
 StormData$EVTYPE[grepl("MARINE MISHAP", StormData$EVTYPE)] <- "MARINE ACCIDENT"
 
-StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
-StormLevels <- levels(StormData$EVTYPE)
+StormData$EVTYPE[grepl("SLEET", StormData$EVTYPE)] <- "SLEET"
 
+StormData$EVTYPE[grepl("FOG", StormData$EVTYPE)] <- "FOG"
+
+StormData$EVTYPE[grepl("SWELL", StormData$EVTYPE)] <- "HIGH SWELLS"
+
+StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
 ```
 
 
 <br>
-Even after all that conversion there are still 124 different types of weather events, but the most severe ones should be aggregated into a few names key weather event types. 
+Even after all that conversion there are still 117 different types of weather events, but the most significant ones should be aggregated into a few names key weather event types. 
 ```{r}
 length(levels(StormData$EVTYPE))
 ```
@@ -299,21 +308,123 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 ```
 
 And make the plots
-```{r, fig.align='center', fig.height=8, fig.width=8}
+```{r, fig.align='center', fig.height=8, fig.width=8, cache=TRUE}
 multiplot(p1,p2, cols=1)
 ```
 
 
-####Property and Crop Damage
-
 ```{r}
-sum(StormData$CROPDMG > 0 | StormData$PROPDMG >0 )
-range(StormData$CROPDMG[StormData$CROPDMG > 0])
-range(StormData$PROPDMG[StormData$PROPDMG > 0])
+TopInjuriesFatalities; MostLethalWeather
 ```
 
 
+<br>
+<br>
+
+####Property and Crop Damage
+
+There were 245031 weather events that resulted in some level of property or crop damage. First I'll make a new dataset called StormDamage that lists just those events.
+
+```{r}
+sum(StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
+
+StormDamage <- filter(StormData, StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
+dim(StormDamage)
+```
+
+```{r}
+
+StormDamage$PROPDMGEXP <- as.character(StormDamage$PROPDMGEXP)
+StormDamage$CROPDMGEXP <- as.character(StormDamage$CROPDMGEXP)
+
+StormDamage$PROPDMGEXP <- toupper(StormDamage$PROPDMGEXP)
+StormDamage$CROPDMGEXP <- toupper(StormDamage$CROPDMGEXP)
+
+StormDamage$PROPDMGEXP[grepl("K", StormDamage$PROPDMGEXP)] <- "1000"
+StormDamage$PROPDMGEXP[grepl("M", StormDamage$PROPDMGEXP)] <- "1000000"
+StormDamage$PROPDMGEXP[grepl("H", StormDamage$PROPDMGEXP)] <- "100"
+StormDamage$PROPDMGEXP[grepl("B", StormDamage$PROPDMGEXP)] <- "1000000000"
+
+
+StormDamage$CROPDMGEXP[grepl("K", StormDamage$CROPDMGEXP)] <- "1000"
+StormDamage$CROPDMGEXP[grepl("M", StormDamage$CROPDMGEXP)] <- "1000000"
+StormDamage$CROPDMGEXP[grepl("H", StormDamage$CROPDMGEXP)] <- "100"
+StormDamage$CROPDMGEXP[grepl("B", StormDamage$CROPDMGEXP)] <- "1000000000"
+
+
+StormDamage$CROPDMGEXP<- as.numeric(StormDamage$CROPDMGEXP)
+StormDamage$PROPDMGEXP<- as.numeric(StormDamage$PROPDMGEXP)
+
+sum(is.na(StormDamage$PROPDMGEXP))
+sum(is.na(StormDamage$CROPDMGEXP))
+
+
+
+StormDamage$CROPDMGEXP[StormDamage$CROPDMGEXP == 0 & !is.na(StormDamage$CROPDMGEXP)] <- 1
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 1 & !is.na(StormDamage$PROPDMGEXP)] <- 10
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 2 & !is.na(StormDamage$PROPDMGEXP)] <- 100
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 3 & !is.na(StormDamage$PROPDMGEXP)] <- 1000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 4 & !is.na(StormDamage$PROPDMGEXP)] <- 10000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 5 & !is.na(StormDamage$PROPDMGEXP)] <- 100000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 6 & !is.na(StormDamage$PROPDMGEXP)] <- 1000000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 7 & !is.na(StormDamage$PROPDMGEXP)] <- 10000000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 8 & !is.na(StormDamage$PROPDMGEXP)] <- 100000000
+
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 0 & !is.na(StormDamage$PROPDMGEXP)] <- 1
+
+StormDamage$CROPDMG[is.na(StormDamage$CROPDMG)] <- 0
+StormDamage$CROPDMGEXP[is.na(StormDamage$CROPDMGEXP)] <- 0
+StormDamage$PROPDMG[is.na(StormDamage$PROPDMG)] <- 0  
+StormDamage$PROPDMGEXP[is.na(StormDamage$PROPDMGEXP)] <- 0
+
+StormDamage$CROPDMG <- StormDamage$CROPDMG * StormDamage$CROPDMGEXP
+StormDamage$PROPDMG <- StormDamage$PROPDMG * StormDamage$PROPDMGEXP
+
+
+
+
+StormDamage$TOTALDMG <- StormDamage$PROPDMG + StormDamage$CROPDMG
+
+
+
+
+levels(StormDamage$EVTYPE)
+names(DamageByEvent)
+DamageByEvent<- tapply(StormDamage$TOTALDMG, StormDamage$EVTYPE, sum)
+DamageByEvent<- data.table(EVTYPE = names(DamageByEvent), DAMAGE = DamageByEvent)
+DamageByEvent<- DamageByEvent[!is.na(DamageByEvent$DAMAGE)]
+
+DamageByEvent <- arrange(DamageByEvent, desc(DAMAGE))
+
+
+p3 <- ggplot(DamageByEvent[1:15], aes(EVTYPE, DAMAGE))
+p3 <- p3 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p3 <- p3 + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage")
+
+
+
+MostSevereEVTYPE<- DamageByEvent$EVTYPE[1:15]
+
+HighestDamage <- StormDamage[StormDamage$EVTYPE %in% MostSevereEVTYPE]
+HighestDamage$EVTYPE <- as.factor(as.character(HighestDamage$EVTYPE))
+
+
+
+p5 <- qplot(EVTYPE, TOTALDMG, data=HighestDamage,na.rm = TRUE, geom="boxplot")
+p5 <- p5 + scale_y_log10() + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage, Log Scale") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+
+```
+
+
+
+
 ###Results
+
+```{r, cache=TRUE, fig.align='center', fig.height=8, fig.width=8}
+multiplot(p3,p5,cols=1)
+```
+
+
 	•	There should be a section titled Results in which your results are presented.
 ```{r}
 

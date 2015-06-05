@@ -1,13 +1,23 @@
-library(dplyr) ; library(data.table); library(ggplot2)
+library(dplyr) ; library(data.table); library(ggplot2); options(width=60)
+
+
+if(!file.exists("./data/StormData.csv.bz2")){
+        if(!file.exists("./data/")){dir.create("./data/")}
+        url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
+        download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
+}
 
 
 
-if(!file.exists("./data/")){dir.create("./data/")}
-url_data <- "https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
-download.file(url_data, destfile="./data/StormData.csv.bz2", method="curl")
-StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
+if(!which(ls() == "StormData") > 0){
+        StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
+}
 
 
+
+###
+# Remove unnecessary variables
+###
 names(StormData)
 
 StormData <- select(StormData, c(STATE__:EVTYPE, LENGTH:CROPDMGEXP, REFNUM))
@@ -15,10 +25,14 @@ StormData <- select(StormData, c(STATE__:EVTYPE, LENGTH:CROPDMGEXP, REFNUM))
 names(StormData)
 
 
-StormData$EVTYPE <- toupper(StormData$EVTYPE)
 
+####
+# Aggregate different EVTypes
+###
 
 StormData$EVTYPE <- as.character(StormData$EVTYPE)
+
+StormData$EVTYPE <- toupper(StormData$EVTYPE)
 
 StormData <- StormData[!grepl("SUMMARY", StormData$EVTYPE)]
 
@@ -32,7 +46,7 @@ StormData$EVTYPE[grepl("VOLCANIC", StormData$EVTYPE) ] <- "VOLCANIC"
 
 StormData$EVTYPE[grepl("TORN", StormData$EVTYPE) ] <- "TORNADO"
 
-StormData$EVTYPE[grepl("LIGHTN", StormData$EVTYPE) ] <- "LIGHTNING"
+StormData$EVTYPE[grepl("LIGHTN", StormData$EVTYPE) | grepl("LIGHTING", StormData$EVTYPE) | grepl("LIGNTNING", StormData$EVTYPE) ] <- "LIGHTNING"
 
 StormData$EVTYPE[grepl("RAIN", StormData$EVTYPE) ] <- "RAIN"
 
@@ -48,6 +62,8 @@ StormData$EVTYPE[grepl("BLIZZARD", StormData$EVTYPE) ] <- "BLIZZARD"
 
 StormData$EVTYPE[grepl("WINT", StormData$EVTYPE) ] <- "WINTER STORM"
 
+StormData$EVTYPE[grepl("WINTER STORM", StormData$EVTYPE) | grepl("BLIZZARD", StormData$EVTYPE) ] <- "WINTER STORM / BLIZZARD"
+
 StormData$EVTYPE[grepl("TROPICAL STORM", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
 StormData$EVTYPE[grepl("TROPICAL", StormData$EVTYPE) ] <- "TROPICAL STORM"
@@ -62,13 +78,11 @@ StormData$EVTYPE[grepl("HAIL", StormData$EVTYPE) ] <- "HAIL"
 
 StormData$EVTYPE[grepl("WIND", StormData$EVTYPE) ] <- "WIND"
 
-StormData$EVTYPE[grepl("HAIL", StormData$EVTYPE) ] <- "HAIL"
-
 StormData$EVTYPE[grepl("WATERSP", StormData$EVTYPE) ] <- "WATERSPOUT"
 
-StormData$EVTYPE[grepl("COOL", StormData$EVTYPE) | grepl("COLD", StormData$EVTYPE)] <- "COLD"
+StormData$EVTYPE[grepl("COOL", StormData$EVTYPE) | grepl("COLD", StormData$EVTYPE) | grepl("HYPOTHERM", StormData$EVTYPE)] <- "COLD"
 
-StormData$EVTYPE[grepl("HOT", StormData$EVTYPE) | grepl("WARM", StormData$EVTYPE) | grepl("HEAT", StormData$EVTYPE) | grepl("HIGH TEMP", StormData$EVTYPE)] <- "HEAT"
+StormData$EVTYPE[grepl("HOT", StormData$EVTYPE) | grepl("WARM", StormData$EVTYPE) | grepl("HEAT", StormData$EVTYPE) | grepl("HIGH TEMP", StormData$EVTYPE) | grepl("HYPERTHERMIA", StormData$EVTYPE)] <- "HEAT"
 
 StormData$EVTYPE[grepl("HEAVY PR", StormData$EVTYPE) | grepl("HEAVY SH", StormData$EVTYPE)] <- "THUNDERSTORM"
 
@@ -102,20 +116,22 @@ StormData$EVTYPE[grepl("HEAVY SEAS", StormData$EVTYPE) | grepl("ROUGH SEAS", Sto
 
 StormData$EVTYPE[grepl("MARINE MISHAP", StormData$EVTYPE)] <- "MARINE ACCIDENT"
 
-StormData$EVTYPE[grepl("HYPOTHERM", StormData$EVTYPE)] <- "HYPOTHERMIA"
+StormData$EVTYPE[grepl("SLEET", StormData$EVTYPE)] <- "SLEET"
 
-StormData$EVTYPE[grepl("HYPERTHERMIA", StormData$EVTYPE)] <- "HYPERTHERMIA"
+StormData$EVTYPE[grepl("FOG", StormData$EVTYPE)] <- "FOG"
+
+StormData$EVTYPE[grepl("FOG", StormData$EVTYPE)] <- "FOG"
 
 StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
-StormLevels <- levels(StormData$EVTYPE)
-
-
-
+levels(StormData$EVTYPE)
 
 length(levels(StormData$EVTYPE))
 
 
 
+###
+# Creating a dataset that shows weather events with just injuries and fatalities
+###
 sum(StormData$INJURIES > 0 | StormData$FATALITIES > 0)
 StormInjuriesFatalities <- filter(StormData, StormData$INJURIES > 0 | StormData$FATALITIES > 0)
 dim(StormInjuriesFatalities)
@@ -123,6 +139,9 @@ dim(StormInjuriesFatalities)
 
 StormInjuriesFatalities$WFI <- sapply(StormInjuriesFatalities$FATALITIES, function(x) x*10) + StormInjuriesFatalities$INJURIES
 
+###
+# New dataset aggregating WFI into different weather event types
+###
 
 WFIbyEVTYPE <- tapply(StormInjuriesFatalities$WFI, StormInjuriesFatalities$EVTYPE, sum, na.rm=TRUE)
 WFIbyEVTYPE <- data.table(EVTYPE = names(WFIbyEVTYPE), WFI = WFIbyEVTYPE)
@@ -131,12 +150,13 @@ WFIbyEVTYPE <- data.table(EVTYPE = names(WFIbyEVTYPE), WFI = WFIbyEVTYPE)
 WFIbyEVTYPE <- WFIbyEVTYPE[!is.na(WFIbyEVTYPE$WFI)]
 
 
-## Sort this in order.
-
-
+## Sort this in descending order.
 WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI))
 
-WFIbyEVTYPE$WFI[1]
+
+###
+# Creating a relative variable indicating WFI per total number of events.
+###
 
 
 #WFIbyEVTYPE$WFI[i] / sum(StormData$EVTYPE == WFIbyEVTYPE$EVTYPE[i])
@@ -151,21 +171,22 @@ for (i in 1: length(WFIbyEVTYPE$WFI)){
 WFIbyEVTYPE <- WFIbyEVTYPE[WFIbyEVTYPE$NumberOfEvents >= 100]
 
 
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI)) 
+TopInjuriesFatalities <- WFIbyEVTYPE[1:10]
 
-
-
-        
-p1 <- ggplot(WFIbyEVTYPE, aes(EVTYPE, WFI))
+p1 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFI))
 p1 <- p1 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
-p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Event", x="Weather Event", y="Weighted Fatalities and Injuries")
-  
+p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type", x="", y="Weighted Fatalities and Injuries")
 
 
+WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFIperEvent)) 
+MostLethalWeather <- WFIbyEVTYPE[1:10]
 
-p2 <- ggplot(WFIbyEVTYPE, aes(EVTYPE, WFIperEvent))
+
+p2 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFIperEvent))
 p2 <- p2 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust = 0))
-p2 <- p2 + labs(title = "Weighted Fatalities and Injuries by Event\ Divided by the number of weather events", x="Weather Event", y="Weighted Fatalities and Injuries")
-
+p2 <- p2 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type\nDivided by the Total Number of Each Weather Event Type", x="", y="Weighted Fatalities and Injuries") + 
+        theme(plot.title = element_text(hjust = 0.5))
 
 # Multiple plot function
 #
@@ -215,6 +236,107 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 
 
 multiplot(p1,p2, cols=1)
+
+######
+#####
+#  Crop and Property Damage
+#####
+#####
+
+sum(StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
+
+
+
+StormDamage <- filter(StormData, StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
+dim(StormDamage)
+
+StormDamage$PROPDMGEXP <- as.character(StormDamage$PROPDMGEXP)
+StormDamage$CROPDMGEXP <- as.character(StormDamage$CROPDMGEXP)
+
+StormDamage$PROPDMGEXP <- toupper(StormDamage$PROPDMGEXP)
+StormDamage$CROPDMGEXP <- toupper(StormDamage$CROPDMGEXP)
+
+StormDamage$PROPDMGEXP[grepl("K", StormDamage$PROPDMGEXP)] <- "1000"
+StormDamage$PROPDMGEXP[grepl("M", StormDamage$PROPDMGEXP)] <- "1000000"
+StormDamage$PROPDMGEXP[grepl("H", StormDamage$PROPDMGEXP)] <- "100"
+StormDamage$PROPDMGEXP[grepl("B", StormDamage$PROPDMGEXP)] <- "1000000000"
+
+
+StormDamage$CROPDMGEXP[grepl("K", StormDamage$CROPDMGEXP)] <- "1000"
+StormDamage$CROPDMGEXP[grepl("M", StormDamage$CROPDMGEXP)] <- "1000000"
+StormDamage$CROPDMGEXP[grepl("H", StormDamage$CROPDMGEXP)] <- "100"
+StormDamage$CROPDMGEXP[grepl("B", StormDamage$CROPDMGEXP)] <- "1000000000"
+
+
+StormDamage$CROPDMGEXP<- as.numeric(StormDamage$CROPDMGEXP)
+StormDamage$PROPDMGEXP<- as.numeric(StormDamage$PROPDMGEXP)
+
+sum(is.na(StormDamage$PROPDMGEXP))
+sum(is.na(StormDamage$CROPDMGEXP))
+
+
+
+StormDamage$CROPDMGEXP[StormDamage$CROPDMGEXP == 0 & !is.na(StormDamage$CROPDMGEXP)] <- 1
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 1 & !is.na(StormDamage$PROPDMGEXP)] <- 10
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 2 & !is.na(StormDamage$PROPDMGEXP)] <- 100
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 3 & !is.na(StormDamage$PROPDMGEXP)] <- 1000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 4 & !is.na(StormDamage$PROPDMGEXP)] <- 10000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 5 & !is.na(StormDamage$PROPDMGEXP)] <- 100000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 6 & !is.na(StormDamage$PROPDMGEXP)] <- 1000000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 7 & !is.na(StormDamage$PROPDMGEXP)] <- 10000000
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 8 & !is.na(StormDamage$PROPDMGEXP)] <- 100000000
+
+StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 0 & !is.na(StormDamage$PROPDMGEXP)] <- 1
+
+StormDamage$CROPDMG[is.na(StormDamage$CROPDMG)] <- 0
+StormDamage$CROPDMGEXP[is.na(StormDamage$CROPDMGEXP)] <- 0
+StormDamage$PROPDMG[is.na(StormDamage$PROPDMG)] <- 0  
+StormDamage$PROPDMGEXP[is.na(StormDamage$PROPDMGEXP)] <- 0
+
+StormDamage$CROPDMG <- StormDamage$CROPDMG * StormDamage$CROPDMGEXP
+StormDamage$PROPDMG <- StormDamage$PROPDMG * StormDamage$PROPDMGEXP
+
+
+
+
+StormDamage$TOTALDMG <- StormDamage$PROPDMG + StormDamage$CROPDMG
+
+
+
+
+levels(StormDamage$EVTYPE)
+names(DamageByEvent)
+DamageByEvent<- tapply(StormDamage$TOTALDMG, StormDamage$EVTYPE, sum)
+DamageByEvent<- data.table(EVTYPE = names(DamageByEvent), DAMAGE = DamageByEvent)
+DamageByEvent<- DamageByEvent[!is.na(DamageByEvent$DAMAGE)]
+
+DamageByEvent <- arrange(DamageByEvent, desc(DAMAGE))
+
+
+p3 <- ggplot(DamageByEvent[1:15], aes(EVTYPE, DAMAGE))
+p3 <- p3 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p3 <- p3 + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage")
+
+
+
+MostSevereEVTYPE<- DamageByEvent$EVTYPE[1:15]
+
+HighestDamage <- StormDamage[StormDamage$EVTYPE %in% MostSevereEVTYPE]
+HighestDamage$EVTYPE <- as.factor(as.character(HighestDamage$EVTYPE))
+
+
+
+p5 <- qplot(EVTYPE, TOTALDMG, data=HighestDamage,na.rm = TRUE, geom="boxplot")
+p5 <- p5 + scale_y_log10() + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+
+
+
+multiplot(p3,p5,cols=1)
+
+# Variable PROPDMGEXP and CROPDMGEXP contain a factor to multiply the CROPDMG and PROPDMG 
+#variables. Mostly it's H, K, and M for hundreds, thousands and millions, but there are 
+#also numbers from 0 to 8 and some other random symbols. 
+
 
 #The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions 
 #about severe weather events. You must use the database to answer the questions below and show the code 
