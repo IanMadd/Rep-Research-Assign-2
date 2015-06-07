@@ -182,6 +182,15 @@ p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type"
 WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFIperEvent)) 
 MostLethalWeather <- WFIbyEVTYPE[1:10]
 
+HighestInjFatal <- StormInjuriesFatalities[StormInjuriesFatalities$EVTYPE %in% TopInjuriesFatalities$EVTYPE]
+HighestInjFatal$EVTYPE <- as.factor(as.character(HighestInjFatal$EVTYPE))
+
+p3 <- qplot(EVTYPE, WFI, data=HighestInjFatal,na.rm = TRUE, geom="boxplot")
+p3 <- p2 + scale_y_log10() + labs(title = "Weighted Fatalities and Injuries by Weather Type", x="", y="Weighted Injuries and Fatalities (Log Scale)") + theme(axis.text.x = element_text(angle = 270, hjust=0, vjust=0.5))
+
+p3
+
+
 
 p2 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFIperEvent))
 p2 <- p2 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust = 0))
@@ -307,15 +316,30 @@ StormDamage$TOTALDMG <- StormDamage$PROPDMG + StormDamage$CROPDMG
 levels(StormDamage$EVTYPE)
 names(DamageByEvent)
 DamageByEvent<- tapply(StormDamage$TOTALDMG, StormDamage$EVTYPE, sum)
-DamageByEvent<- data.table(EVTYPE = names(DamageByEvent), DAMAGE = DamageByEvent)
-DamageByEvent<- DamageByEvent[!is.na(DamageByEvent$DAMAGE)]
 
+DamageByEvent<- data.table(EVTYPE = names(DamageByEvent), DAMAGE = DamageByEvent)
+DamageByEvent$PROPDMG<- tapply(StormDamage$PROPDMG, StormDamage$EVTYPE, sum)
+DamageByEvent$CROPDMG<- tapply(StormDamage$CROPDMG, StormDamage$EVTYPE, sum)
+
+
+DamageByEvent<- DamageByEvent[!is.na(DamageByEvent$DAMAGE)]
 DamageByEvent <- arrange(DamageByEvent, desc(DAMAGE))
 
 
-p3 <- ggplot(DamageByEvent[1:15], aes(EVTYPE, DAMAGE))
-p3 <- p3 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
-p3 <- p3 + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage")
+
+
+p4 <- ggplot(DamageByEvent[1:15], aes(EVTYPE, DAMAGE))
+p4 <- p4 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p4 <- p4 + labs(title = "Crop and Property Damage By Weather Event Type", x="", y="Dollars of Damage")
+
+
+
+
+
+
+
+
+
 
 
 

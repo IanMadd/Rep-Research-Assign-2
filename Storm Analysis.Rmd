@@ -1,24 +1,21 @@
 ---
-title: "Storm Analysis: Weather Events That Affect Human Health and the Economy"
+title: "Storm Analysis: Weather Events That Affect Human Health and Damage Property and Crops"
 output: html_document
 ---
-    Title: Your document should have a title that briefly summarizes your data analysis
 
-
+<br>
 
 ###Synopsis
     
-    
-	•	Synopsis: Immediately after the title, there should be a synopsis which describes and summarizes your analysis in at most 10 complete sentences.
+This analysis takes United States weather data from 1950 to 2011 and analyzes it to determine what weather events have the greatest financial cost to agrciulture and property, and what weather events have the greatest impact on human health. Dollar values for damaged property and crops are added together into one variable showing total damage. Injuries and Fatalities are combined into one weighted variable. 
 
 ###Data Processing
 
-	•	There should be a section titled Data Processing which describes (in words and code) how the data were loaded into R and processed for analysis. In particular, your analysis must start from the raw CSV file containing the data. You cannot do any preprocessing outside the document. If preprocessing is time-consuming you may consider using the cache = TRUE option for certain code chunks.
+<br>
 
-
-I begin by downloading the dataset, reading into R, and giving it the name "StormData". 
+The first step is to begin downloading the dataset, reading it into R, and giving it the name "StormData". 
 ```{r}
-library(dplyr) ; library(data.table) ; library(ggplot2); options(width=60)
+library(dplyr) ; library(data.table) ; library(ggplot2); options(width=65)
 ```
 
 
@@ -40,16 +37,25 @@ StormData <- data.table(read.csv(bzfile("./data/StormData.csv.bz2")))
 
 ####Data Cleaning
 
+**Removing Unnecessary Variables**
+
 This data is a bit of a mess. There are 37 variables in the Storm Data, most of those are unnecessary for this analysis. The most important variables are "EVTYPE"" which indicates the type of storm event, "FATALITIES" and "INJURIES" which are self explanatory, and "PROPDMG", "CROPDMG", "PROPDMGEXP" and "CROPDMGEXP" which document property and crop damage. 
 
-The first step is to eliminate a bunch of these unnecessary variables.
-```{r}
+The first step is to eliminate a bunch of these unnecessary variables. This is a full list of the variables in the raw data:
+```{r, cache=TRUE}
 names(StormData)
 ```
-```{r, cache=TRUE}
-StormData <- select(StormData, c(STATE__:EVTYPE, LENGTH:CROPDMGEXP, REFNUM))
+
+I will be eliminating these variables:
+```{r}
+names(StormData)[c(9:22,29:36)]
 ```
-This cuts it down to a more manageable 19 variables. 
+
+
+```{r, cache=FALSE}
+StormData <- select(StormData, c(STATE__:EVTYPE, FATALITIES:CROPDMGEXP, REFNUM))
+```
+This cuts it down to a more manageable 15 variables. 
 
 ```{r}
 names(StormData)
@@ -57,11 +63,11 @@ names(StormData)
 
 <br>
 
-**EVTYPE**
+**Cleaning EVTYPE Variable**
 
-The EVTYPE variable is troubling. It documents the type of storm event but the named events are unwieldy to put it mildly. There are variations on spelling, variation in the use of upper and lower case, typos, events that are abbreviated like TSTM, and events that should be the same but are not like Thunderstorm, THUNDERSTORM, TSTM WIND and THUNDERSTORMWIND. With all these variations there are 935 different factors
+The EVTYPE variable is troubling. It documents the type of storm event but the named events are unwieldy to put it mildly. There are variations on spelling, variation in the use of upper and lower case, typos, events that are abbreviated like TSTM, and events that should be the same but are not like Thunderstorm, THUNDERSTORM, TSTM WIND THUNDERSTORM WIND G50, and THUNDERSTORMWIND. With all these variations there are 935 different factors
 
-To start with I'll put everything in all caps, just eliminating lower case spelling cuts out 37 levels. There's also a list of 76 events that contain the word "SUMMARY", for example "SUMMARY AUGUST 11", that were incorrectly entered and don't indicate any particular weather type. I'm also going to convert and simplify all related event types. For example events that are similar to THUNDERSTORM, e.g. TSTM, THUNDERSTORM WIND G50, etc..., will become one event type "THUNDERSTORM". This next step performs all these weather type aggregations.
+This step will greatly simplify the number of weather event types slimming the 935 different factors down to 116 by standardizing spelling, case, correcting typos, and eliminating certain events that were incorrectly entered. This next step performs all these weather type aggregations and simplifications.
 
 ```{r, cache=TRUE}
 StormData$EVTYPE <- as.character(StormData$EVTYPE)
@@ -95,6 +101,8 @@ StormData$EVTYPE[grepl("HAIL", StormData$EVTYPE) ] <- "HAIL"
 StormData$EVTYPE[grepl("BLIZZARD", StormData$EVTYPE) ] <- "BLIZZARD"
 
 StormData$EVTYPE[grepl("WINT", StormData$EVTYPE) ] <- "WINTER STORM"
+
+StormData$EVTYPE[grepl("WINTER STORM", StormData$EVTYPE) | grepl("BLIZZARD", StormData$EVTYPE) ] <- "WINTER STORM\nBLIZZARD"
 
 StormData$EVTYPE[grepl("TROPICAL STORM", StormData$EVTYPE) ] <- "TROPICAL STORM"
 
@@ -159,68 +167,56 @@ StormData$EVTYPE <- as.factor(as.character(StormData$EVTYPE))
 
 
 <br>
-Even after all that conversion there are still 117 different types of weather events, but the most significant ones should be aggregated into a few names key weather event types. 
+Even after all that conversion there are still 116 different types of weather events, but the most significant ones should be aggregated into a few key weather classifications. 
 ```{r}
 length(levels(StormData$EVTYPE))
 ```
 
+<br>
+
+####Processing Injury and Fatality Data
 
 <br>
  
-To study the impact of storms on human health this analysis will look for storms that impact human health and storms that don't. 
+To study the impact of storms on human health this analysis will look for weather events that have high rates of injuries and fatalities. 
 
 The variables that indicate health impact are:
  
   - "FATALITIES" 
   - "INJURIES" 
 
-<br>
-To study the impact of storms on the economy this analysis will look for storms that damage property and storms that don't. 
-
-The variables that indicate economic impact are:
- 
-  - "PROPDMG"    
-  - "CROPDMG"   
-  
-Both "PROPDMG" and "CROPDMG" give dollar values of property or crop damage. There are two other variables,  "PROPDMGEXP" and "CROPDMGEXP", that give values indicating the order of magnitude of the damage, for example 'h' or 'H' indicates hundreds of dollars. Combining the two sets of values indicates how much damage there was. For example, a 1 in the PROPDMG column, plus "H" in the PROPDMGEXP column indicates a total of $100 of property damage. 2.5 plus "K" indicates $2,500 of damage. A full key of PROPDMGEXP values is included at the bottom of this document.
-
-<br>
-
-What I'm looking for is weather events that have a disproportionate impact on the economy or on health. As a hypothetical example, there may be a lot of thunderstorms with a lot of damage but each thunderstorm may have a low probability of injuring people or damaging property. In contrast, there may be many fewer tornadoes but each tornado may be disproportionately destructive. 
-
-####Injuries and Fatalities
-
 There were 21929 storm events that resulted in at least one injury or fatality
 ```{r}
 sum(StormData$INJURIES > 0 | StormData$FATALITIES > 0)
 ```
 
+I'll filter out all events that didn't have any injury or fatality and create a new dataset, "StormInjuriesFatalities", that contains just weather events that resulted in an injury or fatality.
 ```{r, cache=TRUE}
 library(dplyr)
 
 StormInjuriesFatalities <- filter(StormData, StormData$INJURIES > 0 | StormData$FATALITIES > 0)
 dim(StormInjuriesFatalities)
-```
 
-I'm creating a new variable called WFI, or Weighted Fatalities and Injuries. This variable will combine injuries and fatalities into one variable and give more weight to fatalities. The formula is Fatalities * 10 + Injuries. 
+StormInjuriesFatalities$EVTYPE <- as.factor(as.character(StormInjuriesFatalities$EVTYPE))
+```
+<br>
+
+**Weighted Fatalities and Injuries**
+
+This step creates a new variable called WFI, or Weighted Fatalities and Injuries. This variable will combine injuries and fatalities into one variable and give more weight to fatalities. The formula is WFI = Fatalities * 10 + Injuries. 
 
 ```{r, cache=TRUE}
 StormInjuriesFatalities$WFI <- sapply(StormInjuriesFatalities$FATALITIES, function(x) x*10) + StormInjuriesFatalities$INJURIES
 ```
 
-Using tapply I'll aggregate the WFI variable by each storm event type.
+Using tapply I'll aggregate the WFI variable by each storm event type and create a new dataset called WFIbyEVTYPE that shows the aggregated number WFI by each type of weather event.
 
 ```{r, cache=TRUE}
 WFIbyEVTYPE <- tapply(StormInjuriesFatalities$WFI, StormInjuriesFatalities$EVTYPE, sum, na.rm=TRUE)
 WFIbyEVTYPE <- data.table(EVTYPE = names(WFIbyEVTYPE), WFI = WFIbyEVTYPE)
 ```
 
-There are a lot of weather event types that don't have any injuries or fatalities. This step eliminates all NA's in WFIbyEVTYPE
-```{r, cache=TRUE}
-WFIbyEVTYPE <- WFIbyEVTYPE[!is.na(WFIbyEVTYPE$WFI)]
-```
-
-
+This step adds the number of total events of each event type and adds that number to the WFIbyEVTYPE dataset under the variable "NumberOfEvents".
 ```{r, cache=TRUE}
 WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI))
 
@@ -234,100 +230,38 @@ WFIbyEVTYPE <- WFIbyEVTYPE[WFIbyEVTYPE$NumberOfEvents >= 100]
 
 ```
 
-Create two plots.
-```{r, cache=TRUE}
+This step creates two plots showing WFI on the Y axis and the weather event type on the X axis.
+```{r, cache=FALSE}
 
 WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFI)) 
-TopInjuriesFatalities <- WFIbyEVTYPE[1:10]
         
 p1 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFI))
-p1 <- p1 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
+p1 <- p1 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, vjust=.5, hjust=0))
 p1 <- p1 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type", x="", y="Weighted Fatalities and Injuries")
-  
-
-WFIbyEVTYPE <- arrange(WFIbyEVTYPE, desc(WFIperEvent)) 
-MostLethalWeather <- WFIbyEVTYPE[1:10]
-
-
-p2 <- ggplot(WFIbyEVTYPE[1:10], aes(EVTYPE, WFIperEvent))
-p2 <- p2 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust = 0))
-p2 <- p2 + labs(title = "Weighted Fatalities and Injuries by Weather Event Type\nDivided by the Total Number of Each Weather Event Type", x="", y="Weighted Fatalities and Injuries") + 
-     theme(plot.title = element_text(hjust = 0.5))
 
 ```
 
-Initialize the multiplot function.
-```{r, cache=TRUE}
-
-# Multiple plot function
-#
-# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
-# - cols:   Number of columns in layout
-# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
-#
-# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
-# then plot 1 will go in the upper left, 2 will go in the upper right, and
-# 3 will go all the way across the bottom.
-#
-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
-  library(grid)
-  
-  # Make a list from the ... arguments and plotlist
-  plots <- c(list(...), plotlist)
-  
-  numPlots = length(plots)
-  
-  # If layout is NULL, then use 'cols' to determine layout
-  if (is.null(layout)) {
-    # Make the panel
-    # ncol: Number of columns of plots
-    # nrow: Number of rows needed, calculated from # of cols
-    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
-                     ncol = cols, nrow = ceiling(numPlots/cols))
-  }
-  
-  if (numPlots==1) {
-    print(plots[[1]])
-    
-  } else {
-    # Set up the page
-    grid.newpage()
-    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
-    
-    # Make each plot, in the correct location
-    for (i in 1:numPlots) {
-      # Get the i,j matrix positions of the regions that contain this subplot
-      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-      
-      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
-                                      layout.pos.col = matchidx$col))
-    }
-  }
-}
-
-```
-
-And make the plots
-```{r, fig.align='center', fig.height=8, fig.width=8, cache=TRUE}
-multiplot(p1,p2, cols=1)
-```
-
-
-```{r}
-TopInjuriesFatalities; MostLethalWeather
-```
 
 
 <br>
-<br>
 
-####Property and Crop Damage
+####Processing and Cleaning Property and Crop Damage Data
+
+<br>
+To study the impact of storms on the economy this analysis will look at the dollar value of damage from 
+
+The variables that indicate economic impact are:
+ 
+  - "PROPDMG"    
+  - "CROPDMG"   
+  - "PROPDMGEXP"    
+  - "CROPDMGEXP"
+  
+Both "PROPDMG" and "CROPDMG" give dollar values of property or crop damage. There are two other variables,  "PROPDMGEXP" and "CROPDMGEXP", that give values indicating the order of magnitude of the damage. 
 
 There were 245031 weather events that resulted in some level of property or crop damage. First I'll make a new dataset called StormDamage that lists just those events.
 
-```{r, cache=TRUE}
-sum(StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
-
+```{r, cache=FALSE}
 StormDamage <- filter(StormData, StormData$PROPDMG > 0 | StormData$CROPDMG > 0)
 dim(StormDamage)
 ```
@@ -336,7 +270,13 @@ dim(StormDamage)
 
 StormDamage$PROPDMGEXP <- as.character(StormDamage$PROPDMGEXP)
 StormDamage$CROPDMGEXP <- as.character(StormDamage$CROPDMGEXP)
+```
 
+
+The PROPDMGEXP and CROPDMGEXP indicate the magnitude of the damage, mostly using the variables, H, K, and M to indicated hundreds, thousands and millions. Combining PROPDMG with PROPDMGEXP and CROPDMG with CROPDMGEXP indicates how much total damage there was. For example, a 2 in the PROPDMG column, plus "H" in the PROPDMGEXP column indicates a total of $200 of property damage. 2.5 plus "K" indicates $2,500 of damage. A full key of PROPDMGEXP values is included at the bottom of this document. 
+
+To simplify this, this step will convert these letter values into their numerical equivalents and in a later step they can multiplied together to give a total dollar value of damage.
+```{r}
 StormDamage$PROPDMGEXP <- toupper(StormDamage$PROPDMGEXP)
 StormDamage$CROPDMGEXP <- toupper(StormDamage$CROPDMGEXP)
 
@@ -354,9 +294,12 @@ StormDamage$CROPDMGEXP[grepl("B", StormDamage$CROPDMGEXP)] <- "1000000000"
 
 StormDamage$CROPDMGEXP<- as.numeric(StormDamage$CROPDMGEXP)
 StormDamage$PROPDMGEXP<- as.numeric(StormDamage$PROPDMGEXP)
+```
+<br>
 
+Some of the PROPDMGEXP and CROPDMGEXP data has numbers. This step converts those numbers to factors of 10, for example a 3 will become 10^3 or 1,000.
 
-
+```{r}
 
 StormDamage$CROPDMGEXP[StormDamage$CROPDMGEXP == 0 & !is.na(StormDamage$CROPDMGEXP)] <- 1
 StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 1 & !is.na(StormDamage$PROPDMGEXP)] <- 10
@@ -369,101 +312,112 @@ StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 7 & !is.na(StormDamage$PROPDMGE
 StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 8 & !is.na(StormDamage$PROPDMGEXP)] <- 100000000
 
 StormDamage$PROPDMGEXP[StormDamage$PROPDMGEXP == 0 & !is.na(StormDamage$PROPDMGEXP)] <- 1
+```
 
+
+This step replaces NA values with the number zero so they can be added in a later step without producing an error.
+```{r}
 StormDamage$CROPDMG[is.na(StormDamage$CROPDMG)] <- 0
 StormDamage$CROPDMGEXP[is.na(StormDamage$CROPDMGEXP)] <- 0
 StormDamage$PROPDMG[is.na(StormDamage$PROPDMG)] <- 0  
 StormDamage$PROPDMGEXP[is.na(StormDamage$PROPDMGEXP)] <- 0
+```
 
+This step multiplies PROPDMG with PROPDMGEXP and CROPDMG with CROPDMGEXP producing two variables indicating the total dollars of damage for each category.
+```{r}
 StormDamage$CROPDMG <- StormDamage$CROPDMG * StormDamage$CROPDMGEXP
 StormDamage$PROPDMG <- StormDamage$PROPDMG * StormDamage$PROPDMGEXP
+```
 
-
-
-
+This step adds the crop damage and property damage into one variable, TOTALDMG
+```{r}
 StormDamage$TOTALDMG <- StormDamage$PROPDMG + StormDamage$CROPDMG
+```
 
-
+This step creates a new dataset "DamageByEvent" that indicates the total amount of damage by each weather event type.
+```{r}
 DamageByEvent<- tapply(StormDamage$TOTALDMG, StormDamage$EVTYPE, sum)
 DamageByEvent<- data.table(EVTYPE = names(DamageByEvent), DAMAGE = DamageByEvent)
 DamageByEvent<- DamageByEvent[!is.na(DamageByEvent$DAMAGE)]
-
 DamageByEvent <- arrange(DamageByEvent, desc(DAMAGE))
-
-
-p3 <- ggplot(DamageByEvent[1:15], aes(EVTYPE, DAMAGE))
-p3 <- p3 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, hjust=0))
-p3 <- p3 + labs(title = "Crop and Property Damage By Weather Event Type", y="Dollars of Damage",       x="")
-
-
-
-MostSevereEVTYPE<- DamageByEvent$EVTYPE[1:15]
-
-HighestDamage <- StormDamage[StormDamage$EVTYPE %in% MostSevereEVTYPE]
-HighestDamage$EVTYPE <- as.factor(as.character(HighestDamage$EVTYPE))
-
-
-
-p5 <- qplot(EVTYPE, TOTALDMG, data=HighestDamage,na.rm = TRUE, geom="boxplot")
-p5 <- p5 + scale_y_log10() + labs(title = "Crop and Property Damage By Weather Event Type", y="Dollars of Damage, Log Scale", x="") + theme(axis.text.x = element_text(angle = 270, hjust=0))
-
 ```
 
+Creating plots depicting the 15 weather types that produce the most damage.
+```{r}
+p3 <- ggplot(DamageByEvent[1:10], aes(EVTYPE, DAMAGE))
+p3 <- p3 + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 270, vjust=.5 ,hjust=0))
+p3 <- p3 + labs(title = "Crop and Property Damage By Weather Event Type", y="Dollars of Damage",       x="")
+```
 
-
+<br>
+<br>
 
 ###Results
 
-```{r, fig.align='center', fig.height=10, fig.width=8}
-multiplot(p3,p5,cols=1)
+<br>
+
+**Injuries and Fatalities**
+
+Tornadoes have the greatest impact on human health, followed by heat, flooding, thunderstorms, and lightning.
+```{r, fig.align='center', fig.height=6, fig.width=8, cache=FALSE}
+p1
 ```
 
 
-	•	There should be a section titled Results in which your results are presented.
+**Crop and Property Damage**
+
+Flooding has the greatest impact on property and crop values, followed by hurricane, tornado, storm surge and hail. 
+```{r, fig.align='center', fig.height=6, fig.width=8}
+p3
+```
+
+
+
 ```{r}
 
 ```
 
-
-```{r}
-
-```
-
-Your data analysis must address the following questions:
-  1	Across the United States, which types of events (as indicated in the EVTYPE variable) 
-    are most harmful with respect to population health?
-  2	Across the United States, which types of events have the greatest economic consequences?
-Consider writing your report as if it were to be read by a government or municipal manager who 
-might be responsible for preparing for severe weather events and will need to prioritize resources 
-for different types of events. However, there is no need to make any specific recommendations in your report
-
-
-
-
-####**Document Layout**
-
-	•	You may have other sections in your analysis, but Data Processing and Results are required.
-	•	The analysis document must have at least one figure containing a plot.
-	•	Your analyis must have no more than three figures. Figures may have multiple plots in them (i.e. panel plots), but there cannot be more than three figures total.
-	•	You must show all your code for the work in your analysis document. This may make the document a bit verbose, but that is okay. In general, you should ensure that echo = TRUE for every code chunk (this is the default setting in knitr).
+<br>
+<br>
 	
-	
-	
-	
-	
-###Footnote
+####Footnote
 
-####These are possible values of CROPDMGEXP and PROPDMGEXP:
+#####These are possible values of CROPDMGEXP and PROPDMGEXP and how they are evaluated in this analysis:
+<br>
+
+**Possible Values**
 
 H,h,K,k,M,m,B,b,+,-,?,0,1,2,3,4,5,6,7,8, and blank-character
 
+<br>
+
+**Conversion**
+
 H,h = hundreds = 100
 
-K,k = kilos = thousands = 1,000
+K,k = thousands = 1,000
 
 M,m = millions = 1,000,000
 
 B,b = billions = 1,000,000,000
+
+0 = 1
+
+1 = 10
+
+2 = 100
+
+3 = 1,000
+
+4 = 10,000
+
+5 = 100,000
+
+6 = 1,000,000
+
+7 = 10,000,000
+
+8 = 100,000,000
 
 (+) = 1
 
@@ -471,9 +425,10 @@ B,b = billions = 1,000,000,000
 
 (?) = 0
 
-black/empty character = 0
+blank = 0
 
-numeric 0..8 = 10
+
+<br>
 	
 	
 	
